@@ -50,8 +50,7 @@
       box-shadow: 0 10px 25px rgba(0,0,0,.12);
     }
     .disc-wrapper img {
-      width: 100%;
-      height: 100%;
+      width: 100%; height: 100%;
       object-fit: cover;
       border-radius: 50%;
       display: block;
@@ -79,7 +78,7 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      flex-wrap: nowrap;   /* stay one line */
+      flex-wrap: nowrap;   /* keep one line */
       gap: 10px;
       width: 100%;
     }
@@ -88,18 +87,18 @@
       color: #333;
       font-weight: 300;
       font-variant-numeric: tabular-nums;
-      flex: 0 0 auto;      /* don’t shrink */
+      flex: 0 0 auto;
     }
 
     /* Progress Bar */
     .progress-container {
-      flex: 1 1 auto;      /* flexible */
-      min-width: 0;        /* allow shrinking inside flex */
+      flex: 1 1 auto;
+      min-width: 0;
       height: 30px;
       position: relative;
       display: flex;
       align-items: center;
-      touch-action: none;  /* smoother touch drag */
+      touch-action: none;
     }
     .progress-bar {
       width: 100%;
@@ -110,8 +109,8 @@
     }
     .progress-fill {
       position: absolute;
-      top: 0; left: 0;
-      height: 100%;
+      inset: 0 auto 0 0;
+      height: 2px;
       width: 0%;
       background: #1a1a1a;
       border-radius: 2px;
@@ -125,12 +124,12 @@
       height: clamp(10px, 3vw, 12px);
       background: #1a1a1a;
       border-radius: 50%;
-      pointer-events: none; /* visual only; we handle container events */
+      pointer-events: none;
     }
 
     /* Play button */
     .play-button {
-      flex: 0 0 auto;      /* don’t grow/shrink */
+      flex: 0 0 auto;
       width: clamp(36px, 10vw, 48px);
       height: clamp(36px, 10vw, 48px);
       border: 2px solid #1a1a1a;
@@ -171,14 +170,27 @@
     .play-button.playing .pause-icon { display: block; }
 
     /* Disc Rotation */
-    @keyframes subtleRotate {
-      from { transform: rotate(0deg); }
-      to { transform: rotate(360deg); }
-    }
+    @keyframes subtleRotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
     #disc.playing { animation: subtleRotate 20s linear infinite; }
+
+    /* Hint when autoplay blocked */
+    .hint {
+      margin-top: 10px;
+      font-size: 12px;
+      color: #777;
+      display: none;
+      text-align: center;
+    }
+    .hint.show { display: block; }
   </style>
 </head>
 <body>
+  <!-- Hidden audio (custom UI) -->
+  <audio id="audio"
+         src="https://ppiroonsawan-spec.github.io/my-images/Influencer_TreasureYourMoment_Leda_V101.mp3"
+         preload="metadata"
+         playsinline></audio>
+
   <!-- Header -->
   <div class="header">
     <div class="header-logo">
@@ -212,109 +224,109 @@
           <div class="play-icon"></div>
           <div class="pause-icon"></div>
         </button>
-        <span class="time" id="totalTime">03:00</span>
+        <span class="time" id="totalTime">--:--</span>
       </div>
+      <div class="hint" id="hint">Tap Play to start audio (autoplay is blocked by your browser).</div>
     </div>
   </div>
 
   <script>
+    // ===== Elements =====
+    const audio = document.getElementById('audio');
     const playButton = document.getElementById('playButton');
     const disc = document.getElementById('disc');
     const progressBar = document.getElementById('progressBar');
     const progressFill = document.getElementById('progressFill');
     const progressDot = document.getElementById('progressDot');
     const progressContainer = document.getElementById('progressContainer');
-    const currentTimeEl = document.getElementById('currentTime');
+    const currentTimeEl = document.getElementById('currentTime'); // ซ้าย
+    const totalTimeEl = document.getElementById('totalTime');     // ขวา
+    const hintEl = document.getElementById('hint');
 
-    const TOTAL_SECONDS = 180; // 3:00
+    // ===== Utils =====
+    const pad = n => String(Math.floor(n)).padStart(2, '0');
+    const fmt = s => `${pad(s / 60)}:${pad(s % 60)}`;
+
     let isPlaying = false;
-    let progress = 0; // 0..100
-    let timerId = null;
 
-    function padTime(n) { return String(n).padStart(2, '0'); }
-
-    function updateClockFromProgress(pct) {
-      const currentSeconds = Math.floor((pct / 100) * TOTAL_SECONDS);
-      const minutes = Math.floor(currentSeconds / 60);
-      const seconds = currentSeconds % 60;
-      currentTimeEl.textContent = `${padTime(minutes)}:${padTime(seconds)}`;
+    function setPlayingUI(on) {
+      isPlaying = on;
+      playButton.classList.toggle('playing', on);
+      disc.classList.toggle('playing', on);
     }
 
-    function renderProgress(pct) {
+    // ----- ตั้งเวลา "รวม" ให้สัมพันธ์กับไฟล์จริง -----
+    function setDurationIfReady() {
+      if (audio.duration && isFinite(audio.duration)) {
+        totalTimeEl.textContent = fmt(audio.duration);
+      }
+    }
+    audio.addEventListener('loadedmetadata', setDurationIfReady);
+    audio.addEventListener('canplaythrough', setDurationIfReady);
+
+    // ----- อัปเดตเวลา/แถบ ตาม currentTime จริง -----
+    function renderFromAudio() {
+      if (!audio.duration || !isFinite(audio.duration)) return;
+      const pct = (audio.currentTime / audio.duration) * 100;
       progressFill.style.width = pct + '%';
       progressDot.style.left = pct + '%';
-      updateClockFromProgress(pct);
+      currentTimeEl.textContent = fmt(audio.currentTime);
     }
+    audio.addEventListener('timeupdate', renderFromAudio);
 
-    function start() {
-      if (timerId) return;
-      timerId = setInterval(() => {
-        progress += (100 / TOTAL_SECONDS); // ~0.555... per second
-        if (progress >= 100) {
-          progress = 100;
-          renderProgress(progress);
-          pause(); // auto stop at end
-          return;
-        }
-        renderProgress(progress);
-      }, 1000);
-    }
-
-    function pause() {
-      clearInterval(timerId);
-      timerId = null;
-      isPlaying = false;
-      playButton.classList.remove('playing');
-      disc.classList.remove('playing');
-    }
-
-    function play() {
-      isPlaying = true;
-      playButton.classList.add('playing');
-      disc.classList.add('playing');
-      start();
-    }
-
-    playButton.addEventListener('click', () => {
-      if (isPlaying) { pause(); }
-      else { play(); }
+    // จบเพลง → หยุดหมุน, คงเวลา = duration, จุดอยู่ท้าย
+    audio.addEventListener('ended', () => {
+      setPlayingUI(false);
+      audio.currentTime = audio.duration || 0;
+      renderFromAudio();
     });
 
-    function pctFromClientX(clientX) {
-      const rect = progressBar.getBoundingClientRect();
-      const x = Math.max(0, Math.min(rect.width, clientX - rect.left));
-      return (x / rect.width) * 100;
-    }
+    // ----- ปุ่มเล่น/หยุด -----
+    playButton.addEventListener('click', async () => {
+      hintEl?.classList.remove('show');
+      try {
+        if (audio.paused) { await audio.play(); setPlayingUI(true); }
+        else { audio.pause(); setPlayingUI(false); }
+      } catch { hintEl?.classList.add('show'); }
+    });
 
-    // Click to seek (mouse)
+    // ----- Seek ด้วยเมาส์ -----
     progressBar.addEventListener('click', (e) => {
-      progress = pctFromClientX(e.clientX);
-      renderProgress(progress);
+      if (!audio.duration) return;
+      const rect = progressBar.getBoundingClientRect();
+      const x = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
+      audio.currentTime = (x / rect.width) * audio.duration;
+      renderFromAudio();
     });
 
-    // Touch drag to seek (mobile)
-    let dragging = false;
-    const onTouch = (e) => {
-      const touch = e.touches[0];
-      if (!touch) return;
-      progress = Math.max(0, Math.min(100, pctFromClientX(touch.clientX)));
-      renderProgress(progress);
+    // ----- Seek ด้วยทัช -----
+    const pctFromClientX = (x) => {
+      const r = progressBar.getBoundingClientRect();
+      const dx = Math.max(0, Math.min(r.width, x - r.left));
+      return dx / r.width;
     };
-    progressContainer.addEventListener('touchstart', (e) => { dragging = true; onTouch(e); }, {passive: true});
-    progressContainer.addEventListener('touchmove', onTouch, {passive: true});
-    progressContainer.addEventListener('touchend', () => { dragging = false; }, {passive: true});
+    progressContainer.addEventListener('touchstart', (e) => {
+      if (!audio.duration) return;
+      const t = e.touches[0]; if (!t) return;
+      audio.currentTime = pctFromClientX(t.clientX) * audio.duration;
+    }, {passive:true});
+    progressContainer.addEventListener('touchmove', (e) => {
+      if (!audio.duration) return;
+      const t = e.touches[0]; if (!t) return;
+      audio.currentTime = pctFromClientX(t.clientX) * audio.duration;
+    }, {passive:true});
 
-    // Init
-    renderProgress(progress);
-
-    // Autoplay on page load
-    window.addEventListener('load', () => {
-      play();
+    // ----- Autoplay ตอนโหลด (ถ้าถูกบล็อกจะแสดง hint และรอแตะ) -----
+    window.addEventListener('load', async () => {
+      setDurationIfReady();          // บางเบราว์เซอร์รู้ duration ตั้งแต่ load
+      renderFromAudio();             // ให้ 00:00 แสดงทันที
+      try { await audio.play(); setPlayingUI(true); }
+      catch { setPlayingUI(false); hintEl?.classList.add('show'); }
     });
 
-    // Optional: pause timer when tab hidden to save battery
+    // Optional: หยุดเมื่อสลับแท็บ
     document.addEventListener('visibilitychange', () => {
-      if (document.hidden) { pause(); }
+      if (document.hidden && !audio.paused) { audio.pause(); setPlayingUI(false); }
     });
   </script>
 </body>
