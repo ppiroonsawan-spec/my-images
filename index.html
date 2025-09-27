@@ -299,76 +299,95 @@
 
     let isPlaying = false;
 
-    function padTime(n) { return String(n).padStart(2, '0'); }
-
-    // Update time text
-    function updateClock() {
-      const minutes = Math.floor(audio.currentTime / 60);
-      const seconds = Math.floor(audio.currentTime % 60);
-      currentTimeEl.textContent = `${padTime(minutes)}:${padTime(seconds)}`;
-    }
-
-    // Update progress bar
-    function renderProgress() {
-      const pct = (audio.currentTime / audio.duration) * 100;
-      progressFill.style.width = pct + '%';
-      progressDot.style.left = pct + '%';
-      updateClock();
-    }
-
-    function pause() {
-      audio.pause();
-      isPlaying = false;
-      playButton.classList.remove('playing');
-      disc.classList.remove('playing');
-    }
-
-    function play() {
-      audio.play();
-      isPlaying = true;
-      playButton.classList.add('playing');
-      disc.classList.add('playing');
-    }
-
-    playButton.addEventListener('click', () => {
-      if (isPlaying) { pause(); }
-      else { play(); }
-    });
-
-    // Seek bar click
-    function pctFromClientX(clientX) {
-      const rect = progressBar.getBoundingClientRect();
-      const x = Math.max(0, Math.min(rect.width, clientX - rect.left));
-      return (x / rect.width) * audio.duration;
-    }
-
-    progressBar.addEventListener('click', (e) => {
-      audio.currentTime = pctFromClientX(e.clientX);
-    });
-
-    // Touch drag
-    const onTouch = (e) => {
-      const touch = e.touches[0];
-      if (!touch) return;
-      audio.currentTime = pctFromClientX(touch.clientX);
+    const pad = n => String(Math.floor(n)).padStart(2, '0');
+    const fmt = s => {
+      const secs = Math.max(0, Math.floor(s || 0));
+      return `${pad(secs/60)}:${pad(secs%60)}`;
     };
-    progressContainer.addEventListener('touchstart', onTouch, {passive: true});
-    progressContainer.addEventListener('touchmove', onTouch, {passive: true});
 
-    // Update duration when metadata loaded
-    audio.addEventListener('loadedmetadata', () => {
-      const minutes = Math.floor(audio.duration / 60);
-      const seconds = Math.floor(audio.duration % 60);
-      totalTimeEl.textContent = `${padTime(minutes)}:${padTime(seconds)}`;
-    });
+    function setPlayingUI(on) {
+      isPlaying = on;
+      playButton.classList.toggle('playing', on);
+      disc.classList.toggle('playing', on);
+    }
 
-    // Update progress during play
+    // Update total duration
+    function setDurationIfReady() {
+      if (audio.duration && isFinite(audio.duration)) {
+        totalTimeEl.textContent = fmt(audio.duration);
+      }
+    }
+    audio.addEventListener('loadedmetadata', setDurationIfReady);
+    audio.addEventListener('durationchange', setDurationIfReady);
+    audio.addEventListener('canplaythrough', setDurationIfReady);
+
+    // Update progress + current time
+    function renderProgress() {
+      if (audio.duration && isFinite(audio.duration)) {
+        const pct = (audio.currentTime / audio.duration) * 100;
+        progressFill.style.width = pct + '%';
+        progressDot.style.left = pct + '%';
+      }
+      currentTimeEl.textContent = fmt(audio.currentTime);
+    }
     audio.addEventListener('timeupdate', renderProgress);
 
-    // Overlay button
-    startButton.addEventListener('click', () => {
+    // When audio ends
+    audio.addEventListener('ended', () => {
+      setPlayingUI(false);
+      renderProgress();
+    });
+
+    // Play/Pause toggle
+    playButton.addEventListener('click', () => {
+      if (audio.paused) { audio.play(); setPlayingUI(true); }
+      else { audio.pause(); setPlayingUI(false); }
+    });
+
+    // Seek mouse
+    function timeFromX(xClient) {
+      const rect = progressBar.getBoundingClientRect();
+      const x = Math.max(0, Math.min(rect.width, xClient - rect.left));
+      return audio.duration ? (x / rect.width) * audio.duration : 0;
+    }
+    progressBar.addEventListener('click', (e) => {
+      audio.currentTime = timeFromX(e.clientX);
+      renderProgress();
+    });
+
+    // Seek touch
+    progressContainer.addEventListener('touchstart', (e) => {
+      const t = e.touches[0]; if (!t) return;
+      audio.currentTime = timeFromX(t.clientX);
+    }, {passive:true});
+    progressContainer.addEventListener('touchmove', (e) => {
+      const t = e.touches[0]; if (!t) return;
+      audio.currentTime = timeFromX(t.clientX);
+    }, {passive:true});
+
+    // Overlay start
+    async function startExperience() {
       overlay.style.display = 'none';
-      play();
+      try { await audio.play(); } catch {}
+      setPlayingUI(!audio.paused);
+      setDurationIfReady();
+      renderProgress();
+    }
+    startButton.addEventListener('click', startExperience);
+
+    // On load
+    window.addEventListener('load', () => {
+      currentTimeEl.textContent = '00:00';
+      setDurationIfReady();
+      renderProgress();
+    });
+
+    // Pause when hidden
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden && !audio.paused) {
+        audio.pause();
+        setPlayingUI(false);
+      }
     });
   </script>
 </body>
