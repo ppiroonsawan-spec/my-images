@@ -45,12 +45,13 @@
       height: min(60vw, 450px);
       margin: 50px 0 40px;
       border-radius: 50%;
-      background: #e5e50;
+      background: #e5e5e0;
       overflow: hidden;
       box-shadow: 0 10px 25px rgba(0,0,0,.12);
     }
     .disc-wrapper img {
-      width: 100%; height: 100%;
+      width: 100%;
+      height: 100%;
       object-fit: cover;
       border-radius: 50%;
       display: block;
@@ -109,8 +110,8 @@
     }
     .progress-fill {
       position: absolute;
-      inset: 0 auto 0 0;
-      height: 2px;
+      top: 0; left: 0;
+      height: 100%;
       width: 0%;
       background: #1a1a1a;
       border-radius: 2px;
@@ -170,72 +171,71 @@
     .play-button.playing .pause-icon { display: block; }
 
     /* Disc Rotation */
-    @keyframes subtleRotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    @keyframes subtleRotate {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
     #disc.playing { animation: subtleRotate 20s linear infinite; }
 
-    /* Overlay (popup) */
-    .overlay {
-      position: fixed; inset: 0;
-      background: rgba(0,0,0,.55);
-      display: grid; place-items: center;
-      z-index: 9999;
-      backdrop-filter: blur(2px);
+    /* Overlay */
+    #overlay {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: rgba(0,0,0,0.65);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 2000;
     }
-    .overlay.hidden { display: none; }
-    .overlay-card {
+    .overlay-content {
       background: #fff;
-      border-radius: 18px;
-      padding: 28px 24px;
-      box-shadow: 0 20px 50px rgba(0,0,0,.2);
+      padding: 30px 40px;
+      border-radius: 12px;
       text-align: center;
-      width: min(92vw, 380px);
+      box-shadow: 0 8px 20px rgba(0,0,0,0.25);
+      pointer-events: auto;
     }
-    .overlay-title {
-      font-size: 18px;
-      letter-spacing: 2px;
-      color: #111;
-      margin-bottom: 10px;
+    .overlay-content h2 {
+      font-size: 20px;
+      margin-bottom: 8px;
+      color: #1a1a1a;
     }
-    .overlay-sub {
-      font-size: 13px;
-      color: #666;
-      margin-bottom: 18px;
-    }
-    .overlay-btn {
-      display: inline-block;
-      border: 2px solid #111;
-      border-radius: 999px;
-      padding: 12px 20px;
-      background: #111;
-      color: #fff;
+    .overlay-content p {
       font-size: 14px;
-      letter-spacing: .5px;
-      cursor: pointer;
-      outline: none;
-      transition: transform .06s ease, opacity .2s ease;
+      margin-bottom: 15px;
+      color: #444;
     }
-    .overlay-btn:active { transform: scale(.98); }
-    .overlay-note {
+    .overlay-content button {
+      background: #000;
+      color: #fff;
+      border: none;
+      padding: 12px 28px;
+      border-radius: 20px;
+      font-size: 15px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background .2s;
+    }
+    .overlay-content button:hover {
+      background: #333;
+    }
+    .overlay-content small {
+      display: block;
       margin-top: 10px;
-      font-size: 11px;
-      color: #888;
+      font-size: 12px;
+      color: #777;
     }
   </style>
 </head>
 <body>
-  <!-- Hidden audio (custom UI) -->
-  <audio id="audio"
-         src="https://ppiroonsawan-spec.github.io/my-images/Influencer_TreasureYourMoment_Leda_V101.mp3"
-         preload="auto"
-         playsinline></audio>
-
-  <!-- Overlay / Popup -->
-  <div class="overlay" id="overlay" role="dialog" aria-modal="true" aria-label="Start experience">
-    <div class="overlay-card" id="overlayCard">
-      <div class="overlay-title">ANANTA</div>
-      <div class="overlay-sub">Tap to start the experience</div>
-      <button class="overlay-btn" id="startBtn">Tap to Start</button>
-      <div class="overlay-note">We need your tap to play audio</div>
+  <!-- Overlay -->
+  <div id="overlay">
+    <div class="overlay-content">
+      <h2>ANANTA</h2>
+      <p>Tap to start the experience</p>
+      <button id="startButton">Tap to Start</button>
+      <small>We need your tap to play audio</small>
     </div>
   </div>
 
@@ -277,13 +277,13 @@
     </div>
   </div>
 
-  <script>
-    // ===== Elements =====
-    const audio = document.getElementById('audio');
-    const overlay = document.getElementById('overlay');
-    const startBtn = document.getElementById('startBtn');
-    const overlayCard = document.getElementById('overlayCard');
+  <!-- Hidden Audio -->
+  <audio id="audio"
+         src="https://ppiroonsawan-spec.github.io/my-images/Influencer_TreasureYourMoment_Leda_V101.mp3"
+         preload="auto"
+         playsinline></audio>
 
+  <script>
     const playButton = document.getElementById('playButton');
     const disc = document.getElementById('disc');
     const progressBar = document.getElementById('progressBar');
@@ -292,110 +292,83 @@
     const progressContainer = document.getElementById('progressContainer');
     const currentTimeEl = document.getElementById('currentTime');
     const totalTimeEl = document.getElementById('totalTime');
+    const audio = document.getElementById('audio');
 
-    const pad = n => String(Math.floor(n)).padStart(2, '0');
-    const fmt = s => `${pad(s / 60)}:${pad(s % 60)}`;
+    const overlay = document.getElementById('overlay');
+    const startButton = document.getElementById('startButton');
 
     let isPlaying = false;
 
-    function setPlayingUI(on) {
-      isPlaying = on;
-      playButton.classList.toggle('playing', on);
-      disc.classList.toggle('playing', on);
+    function padTime(n) { return String(n).padStart(2, '0'); }
+
+    // Update time text
+    function updateClock() {
+      const minutes = Math.floor(audio.currentTime / 60);
+      const seconds = Math.floor(audio.currentTime % 60);
+      currentTimeEl.textContent = `${padTime(minutes)}:${padTime(seconds)}`;
     }
 
-    // Duration from real audio
-    function setDurationIfReady() {
-      if (audio.duration && isFinite(audio.duration)) {
-        totalTimeEl.textContent = fmt(audio.duration);
-      }
-    }
-    audio.addEventListener('loadedmetadata', setDurationIfReady);
-    audio.addEventListener('canplaythrough', setDurationIfReady);
-
-    // Render from audio time
-    function renderFromAudio() {
-      if (!audio.duration || !isFinite(audio.duration)) return;
+    // Update progress bar
+    function renderProgress() {
       const pct = (audio.currentTime / audio.duration) * 100;
       progressFill.style.width = pct + '%';
       progressDot.style.left = pct + '%';
-      currentTimeEl.textContent = fmt(audio.currentTime);
+      updateClock();
     }
-    audio.addEventListener('timeupdate', renderFromAudio);
 
-    // Ended
-    audio.addEventListener('ended', () => {
-      setPlayingUI(false);
-      audio.currentTime = audio.duration || 0;
-      renderFromAudio();
+    function pause() {
+      audio.pause();
+      isPlaying = false;
+      playButton.classList.remove('playing');
+      disc.classList.remove('playing');
+    }
+
+    function play() {
+      audio.play();
+      isPlaying = true;
+      playButton.classList.add('playing');
+      disc.classList.add('playing');
+    }
+
+    playButton.addEventListener('click', () => {
+      if (isPlaying) { pause(); }
+      else { play(); }
     });
 
-    // Play/Pause control
-    playButton.addEventListener('click', async () => {
-      try {
-        if (audio.paused) { await audio.play(); setPlayingUI(true); }
-        else { audio.pause(); setPlayingUI(false); }
-      } catch (_) {}
-    });
-
-    // Seek mouse
-    progressBar.addEventListener('click', (e) => {
-      if (!audio.duration) return;
+    // Seek bar click
+    function pctFromClientX(clientX) {
       const rect = progressBar.getBoundingClientRect();
-      const x = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
-      audio.currentTime = (x / rect.width) * audio.duration;
-      renderFromAudio();
-    });
-
-    // Seek touch
-    const pctFromClientX = (x) => {
-      const r = progressBar.getBoundingClientRect();
-      const dx = Math.max(0, Math.min(r.width, x - r.left));
-      return dx / r.width;
-    };
-    progressContainer.addEventListener('touchstart', (e) => {
-      if (!audio.duration) return;
-      const t = e.touches[0]; if (!t) return;
-      audio.currentTime = pctFromClientX(t.clientX) * audio.duration;
-    }, {passive:true});
-    progressContainer.addEventListener('touchmove', (e) => {
-      if (!audio.duration) return;
-      const t = e.touches[0]; if (!t) return;
-      audio.currentTime = pctFromClientX(t.clientX) * audio.duration;
-    }, {passive:true});
-
-    // Popup start handlers (single button + click anywhere on card)
-    async function startExperience() {
-      try {
-        await audio.play();
-        overlay.classList.add('hidden');
-        setPlayingUI(true);
-      } catch (_) {
-        // if still blocked, keep overlay; browsers usually allow after button press
-      }
+      const x = Math.max(0, Math.min(rect.width, clientX - rect.left));
+      return (x / rect.width) * audio.duration;
     }
-    startBtn.addEventListener('click', startExperience);
-    overlayCard.addEventListener('click', (e) => {
-      if (e.target === overlayCard) startExperience();
+
+    progressBar.addEventListener('click', (e) => {
+      audio.currentTime = pctFromClientX(e.clientX);
     });
 
-    // On load: try autoplay (if allowed, hide overlay automatically)
-    window.addEventListener('load', async () => {
-      setDurationIfReady();
-      renderFromAudio();
-      try {
-        await audio.play();
-        setPlayingUI(true);
-        overlay.classList.add('hidden');
-      } catch (_) {
-        // show overlay until user taps
-        overlay.classList.remove('hidden');
-      }
+    // Touch drag
+    const onTouch = (e) => {
+      const touch = e.touches[0];
+      if (!touch) return;
+      audio.currentTime = pctFromClientX(touch.clientX);
+    };
+    progressContainer.addEventListener('touchstart', onTouch, {passive: true});
+    progressContainer.addEventListener('touchmove', onTouch, {passive: true});
+
+    // Update duration when metadata loaded
+    audio.addEventListener('loadedmetadata', () => {
+      const minutes = Math.floor(audio.duration / 60);
+      const seconds = Math.floor(audio.duration % 60);
+      totalTimeEl.textContent = `${padTime(minutes)}:${padTime(seconds)}`;
     });
 
-    // Pause when tab hidden
-    document.addEventListener('visibilitychange', () => {
-      if (document.hidden && !audio.paused) { audio.pause(); setPlayingUI(false); }
+    // Update progress during play
+    audio.addEventListener('timeupdate', renderProgress);
+
+    // Overlay button
+    startButton.addEventListener('click', () => {
+      overlay.style.display = 'none';
+      play();
     });
   </script>
 </body>
