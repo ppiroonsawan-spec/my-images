@@ -4,11 +4,17 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>ANANTA - Treasure Your Moment</title>
+
+  <!-- Google Font Geologica -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geologica:wght@100..900&display=swap" rel="stylesheet">
+
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { height: 100%; }
     body {
-      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      font-family: "Geologica", sans-serif;
       background: #e5e5e0;
       min-height: 100vh;
       display: flex;
@@ -20,6 +26,7 @@
 
     .header { width: 100%; background: #fff; padding: 20px 0; box-shadow: 0 1px 3px rgba(0,0,0,.05); }
     .header-logo { text-align: center; }
+    .header-logo a { display: inline-block; }
     .header-logo img { height: 30px; width: auto; }
 
     .container { width: 100%; max-width: 800px; display: flex; flex-direction: column; align-items: center; padding: 20px; }
@@ -67,6 +74,15 @@
     .overlay-content button { background: #000; color: #fff; border: none; padding: 12px 28px; border-radius: 20px; font-size: 15px; font-weight: 500; cursor: pointer; }
     .overlay-content button:hover { background: #333; }
     .overlay-content small { display: block; margin-top: 10px; font-size: 12px; color: #777; }
+
+    /* Discover button */
+    .discover-btn { margin-top: 40px; display: none; }
+    .discover-btn a {
+      display: inline-block; background: #000; color: #fff; text-decoration: none;
+      padding: 14px 30px; border-radius: 25px; font-size: 15px; font-weight: 500;
+      transition: background .2s;
+    }
+    .discover-btn a:hover { background: #333; }
   </style>
 </head>
 <body>
@@ -83,7 +99,9 @@
   <!-- Header -->
   <div class="header">
     <div class="header-logo">
-      <img src="https://ppiroonsawan-spec.github.io/my-images/2025%20ANANTA%20Logo.png" alt="ANANTA">
+      <a href="https://anantajewelry.com/" target="_blank">
+        <img src="https://ppiroonsawan-spec.github.io/my-images/2025%20ANANTA%20Logo.png" alt="ANANTA">
+      </a>
     </div>
   </div>
 
@@ -113,11 +131,16 @@
         <span class="time" id="totalTime">--:--</span>
       </div>
     </div>
+
+    <!-- Discover Button -->
+    <div class="discover-btn" id="discoverBtn">
+      <a href="https://anantajewelry.com/" target="_blank">Discover Our Website</a>
+    </div>
   </div>
 
   <!-- Hidden Audio -->
   <audio id="audio"
-         src="Influencer_TreasureYourMoment_Leda_V101.mp3"
+         src="https://asset.anantajewelry.com/Packshot/moment_event/Influencer_TreasureYourMoment _Leda_V101.mp3"
          preload="auto"
          playsinline></audio>
 
@@ -133,8 +156,10 @@
     const audio = document.getElementById('audio');
     const overlay = document.getElementById('overlay');
     const startButton = document.getElementById('startButton');
+    const discoverBtn = document.getElementById('discoverBtn');
 
     let isPlaying = false;
+    let discoverShown = false;
 
     const pad = n => String(Math.floor(n)).padStart(2, '0');
     const fmt = s => {
@@ -148,7 +173,6 @@
       disc.classList.toggle('playing', on);
     }
 
-    // --- Robust duration getter ---
     function setDurationIfReady() {
       if (audio.duration && isFinite(audio.duration)) {
         totalTimeEl.textContent = fmt(audio.duration);
@@ -167,20 +191,17 @@
       }, 200);
     }
 
-    // Listen multiple events that may expose duration
     ['loadedmetadata','durationchange','canplaythrough','loadeddata','progress'].forEach(evt => {
       audio.addEventListener(evt, setDurationIfReady);
     });
 
-    // Force load metadata early
     window.addEventListener('load', () => {
-      audio.load();            // request metadata/buffer asap
+      audio.load();
       currentTimeEl.textContent = '00:00';
-      waitForDuration();       // start polling until duration is known
-      renderProgress();        // render initial UI
+      waitForDuration();
+      renderProgress();
     });
 
-    // --- Progress / current time ---
     function renderProgress() {
       if (audio.duration && isFinite(audio.duration)) {
         const pct = (audio.currentTime / audio.duration) * 100;
@@ -188,17 +209,20 @@
         progressDot.style.left = pct + '%';
       }
       currentTimeEl.textContent = fmt(audio.currentTime);
+
+      if (!discoverShown && audio.currentTime >= 5) {
+        discoverBtn.style.display = 'block';
+        discoverShown = true;
+      }
     }
     audio.addEventListener('timeupdate', renderProgress);
     audio.addEventListener('ended', () => { setPlayingUI(false); renderProgress(); });
 
-    // Play/Pause
     playButton.addEventListener('click', () => {
       if (audio.paused) { audio.play(); setPlayingUI(true); }
       else { audio.pause(); setPlayingUI(false); }
     });
 
-    // Seek (mouse)
     function timeFromX(xClient) {
       const rect = progressBar.getBoundingClientRect();
       const x = Math.max(0, Math.min(rect.width, xClient - rect.left));
@@ -209,7 +233,6 @@
       renderProgress();
     });
 
-    // Seek (touch)
     progressContainer.addEventListener('touchstart', (e) => {
       const t = e.touches[0]; if (!t) return;
       audio.currentTime = timeFromX(t.clientX);
@@ -219,18 +242,15 @@
       audio.currentTime = timeFromX(t.clientX);
     }, {passive:true});
 
-    // Overlay: user tap to start audio
     async function startExperience() {
       overlay.style.display = 'none';
       try { await audio.play(); } catch {}
       setPlayingUI(!audio.paused);
-      // If duration still not known, poll again briefly
       waitForDuration(4000);
       renderProgress();
     }
     startButton.addEventListener('click', startExperience);
 
-    // Pause when hidden
     document.addEventListener('visibilitychange', () => {
       if (document.hidden && !audio.paused) { audio.pause(); setPlayingUI(false); }
     });
