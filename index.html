@@ -15,7 +15,7 @@
     html, body { height: 100%; }
     body {
       font-family: "Geologica", sans-serif;
-      background: #e5e5e0;
+      background: #ffffff;            /* พื้นหลังขาว */
       min-height: 100vh;
       display: flex;
       flex-direction: column;
@@ -33,8 +33,8 @@
 
     .disc-wrapper {
       position: relative; width: min(60vw, 450px); height: min(60vw, 450px);
-      margin: 50px 0 40px; border-radius: 50%; background: #e5e5e0; overflow: hidden;
-      box-shadow: 0 10px 25px rgba(0,0,0,.12);
+      margin: 50px 0 40px; border-radius: 50%; background: #ffffff; /* วงกลมพื้นหลังขาว */
+      overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,.12);
     }
     .disc-wrapper img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; display: block; }
 
@@ -75,8 +75,22 @@
     .overlay-content button:hover { background: #333; }
     .overlay-content small { display: block; margin-top: 10px; font-size: 12px; color: #777; }
 
-    /* Discover button */
-    .discover-btn { margin-top: 40px; display: none; }
+    /* Discover button (fade-in) */
+    .discover-btn {
+      margin-top: 40px;
+      opacity: 0;
+      visibility: hidden;
+      transform: translateY(8px);
+      transition: opacity .6s ease, transform .6s ease, visibility 0s linear .6s;
+      pointer-events: none;
+    }
+    .discover-btn.show {
+      opacity: 1;
+      visibility: visible;
+      transform: translateY(0);
+      transition: opacity .6s ease, transform .6s ease, visibility 0s linear 0s;
+      pointer-events: auto;
+    }
     .discover-btn a {
       display: inline-block; background: #000; color: #fff; text-decoration: none;
       padding: 14px 30px; border-radius: 25px; font-size: 15px; font-weight: 500;
@@ -107,7 +121,8 @@
 
   <div class="container">
     <div class="disc-wrapper">
-      <img src="https://ppiroonsawan-spec.github.io/my-images/Landing_vinyl_BG%201.png" alt="ANANTA Disc" id="disc">
+      <!-- ใช้รูปดิสก์ใหม่ -->
+      <img src="https://asset.anantajewelry.com/Packshot/moment_event/Disc_Treasure_Your_Moment_Square.png" alt="ANANTA Disc" id="disc">
     </div>
 
     <div class="title-section">
@@ -159,7 +174,6 @@
     const discoverBtn = document.getElementById('discoverBtn');
 
     let isPlaying = false;
-    let discoverShown = false;
 
     const pad = n => String(Math.floor(n)).padStart(2, '0');
     const fmt = s => {
@@ -209,20 +223,23 @@
         progressDot.style.left = pct + '%';
       }
       currentTimeEl.textContent = fmt(audio.currentTime);
-
-      if (!discoverShown && audio.currentTime >= 5) {
-        discoverBtn.style.display = 'block';
-        discoverShown = true;
-      }
     }
     audio.addEventListener('timeupdate', renderProgress);
-    audio.addEventListener('ended', () => { setPlayingUI(false); renderProgress(); });
 
+    // เมื่อเสียงจบ: หยุดหมุน/อัปเดต และ "แสดงปุ่ม Discover" แบบ fade-in
+    audio.addEventListener('ended', () => {
+      setPlayingUI(false);
+      renderProgress();
+      discoverBtn.classList.add('show');  // โชว์ด้วยเอฟเฟกต์
+    });
+
+    // Play/Pause
     playButton.addEventListener('click', () => {
       if (audio.paused) { audio.play(); setPlayingUI(true); }
       else { audio.pause(); setPlayingUI(false); }
     });
 
+    // Seek (mouse)
     function timeFromX(xClient) {
       const rect = progressBar.getBoundingClientRect();
       const x = Math.max(0, Math.min(rect.width, xClient - rect.left));
@@ -233,6 +250,7 @@
       renderProgress();
     });
 
+    // Seek (touch)
     progressContainer.addEventListener('touchstart', (e) => {
       const t = e.touches[0]; if (!t) return;
       audio.currentTime = timeFromX(t.clientX);
@@ -242,6 +260,7 @@
       audio.currentTime = timeFromX(t.clientX);
     }, {passive:true});
 
+    // Overlay: user tap to start audio
     async function startExperience() {
       overlay.style.display = 'none';
       try { await audio.play(); } catch {}
@@ -251,6 +270,7 @@
     }
     startButton.addEventListener('click', startExperience);
 
+    // Pause when hidden
     document.addEventListener('visibilitychange', () => {
       if (document.hidden && !audio.paused) { audio.pause(); setPlayingUI(false); }
     });
