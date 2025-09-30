@@ -36,7 +36,6 @@
       position: relative; width: min(60vw, 450px); height: min(60vw, 450px);
       margin: 50px 0 40px; border-radius: 50%; background: #ffffff;
       overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,.12);
-      display: flex; align-items: center; justify-content: center;
     }
     .disc-wrapper img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; display: block; }
 
@@ -66,7 +65,7 @@
     .play-button.playing .play-icon { display: none; } .play-button.playing .pause-icon { display: block; }
 
     @keyframes subtleRotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-    #disc.playing { animation: subtleRotate 20s linear infinite; transform-origin: center center; }
+    #disc.playing { animation: subtleRotate 20s linear infinite; }
 
     /* Overlay */
     #overlay { position: fixed; inset: 0; background: rgba(0,0,0,.65); display: flex; justify-content: center; align-items: center; z-index: 2000; }
@@ -175,6 +174,7 @@
     const discoverBtn = document.getElementById('discoverBtn');
 
     let isPlaying = false;
+    let wasPlayingBeforeHide = false; // <— ใหม่: จำสถานะก่อนสลับจอ
 
     const pad = n => String(Math.floor(n)).padStart(2, '0');
     const fmt = s => {
@@ -236,7 +236,7 @@
 
     // Play/Pause
     playButton.addEventListener('click', () => {
-      if (audio.paused) { audio.play(); setPlayingUI(true); }
+      if (audio.paused) { audio.play().then(()=>setPlayingUI(true)).catch(()=>{}); }
       else { audio.pause(); setPlayingUI(false); }
     });
 
@@ -250,7 +250,6 @@
       audio.currentTime = timeFromX(e.clientX);
       renderProgress();
     });
-
     progressContainer.addEventListener('touchstart', (e) => {
       const t = e.touches[0]; if (!t) return;
       audio.currentTime = timeFromX(t.clientX);
@@ -259,6 +258,29 @@
       const t = e.touches[0]; if (!t) return;
       audio.currentTime = timeFromX(t.clientX);
     }, {passive:true});
+
+    // ===== Resume after switching back =====
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        wasPlayingBeforeHide = !audio.paused; // จำว่ากำลังเล่นอยู่ไหม
+        if (wasPlayingBeforeHide) {
+          audio.pause();         // หยุดชั่วคราวเวลาออก
+          setPlayingUI(false);
+        }
+      } else {
+        // กลับเข้ามา ถ้าเมื่อกี้กำลังเล่นอยู่ให้เล่นต่อ
+        if (wasPlayingBeforeHide) {
+          audio.play().then(() => setPlayingUI(true)).catch(() => {});
+        }
+      }
+    });
+
+    // รองรับกรณีหน้าเด้งกลับมาจาก bfcache (เช่น iOS/บางเบราว์เซอร์)
+    window.addEventListener('pageshow', (e) => {
+      if (e.persisted && wasPlayingBeforeHide) {
+        audio.play().then(() => setPlayingUI(true)).catch(() => {});
+      }
+    });
 
     // Overlay start
     async function startExperience() {
@@ -269,10 +291,6 @@
       renderProgress();
     }
     startButton.addEventListener('click', startExperience);
-
-    document.addEventListener('visibilitychange', () => {
-      if (document.hidden && !audio.paused) { audio.pause(); setPlayingUI(false); }
-    });
   </script>
 </body>
 </html>
